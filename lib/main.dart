@@ -76,84 +76,75 @@ class _MyHomePageState extends State<MyHomePage> {
   List<Pose>? _scanResults;
   CameraImage? img;
   doPoseEstimationOnFrame() async {
-    print('passando 2');
-
     try {
-      if (img != null) {
-        final inputImage = getInputImage(img!);
+      final inputImage = getInputImage();
 
-        final res = await poseDetector.processImage(inputImage);
+      _scanResults = await poseDetector.processImage(inputImage);
 
-        print(res);
-      }
+      print(_scanResults);
+
+      setState(() {
+        isBusy = false;
+        _scanResults;
+      });
     } catch (e) {
       print(e);
+
+      setState(() {
+        isBusy = false;
+      });
     }
-
-    setState(() {
-      isBusy = false;
-    });
-
-    /* poseDetector
-        .processImage(inputImage)
-        .then(
-          (value) => setState(
-            () {
-              print(value);
-
-              _scanResults = value;
-              isBusy = false;
-            },
-          ),
-        )
-        .catchError(
-          (e) => setState(
-            () {
-              print(e);
-              _scanResults = null;
-              isBusy = false;
-            },
-          ),
-        ); */
   }
 
-  InputImage getInputImage(CameraImage img) {
+  InputImage getInputImage() {
     final WriteBuffer allBytes = WriteBuffer();
-    for (final Plane plane in img.planes) {
+    for (final Plane plane in img!.planes) {
       allBytes.putUint8List(plane.bytes);
     }
     final bytes = allBytes.done().buffer.asUint8List();
-    final Size imageSize = Size(img.width.toDouble(), img.height.toDouble());
+    final Size imageSize = Size(img!.width.toDouble(), img!.height.toDouble());
     final camera = cameras[0];
     final imageRotation =
         InputImageRotationValue.fromRawValue(camera.sensorOrientation);
     // if (imageRotation == null) return;
 
-    final inputImageFormat = InputImageFormatValue.fromRawValue(img.format.raw);
+    final inputImageFormat =
+        InputImageFormatValue.fromRawValue(img!.format.raw);
     // if (inputImageFormat == null) return null;
 
-    final InputImageMetadata inputImageMetadata = InputImageMetadata(
-      size: size,
-      rotation: imageRotation!,
-      format: inputImageFormat!,
-      bytesPerRow: imageSize.width.toInt(),
-    );
+    final planeData = img!.planes.map(
+      (Plane plane) {
+        return InputImagePlaneMetadata(
+          bytesPerRow: plane.bytesPerRow,
+          height: plane.height,
+          width: plane.width,
+        );
+      },
+    ).toList();
 
-    final inputImage = InputImage.fromBytes(
-      bytes: bytes,
-      metadata: inputImageMetadata,
+    final inputImageData = InputImageData(
+      size: imageSize,
+      imageRotation: imageRotation!,
+      inputImageFormat: inputImageFormat!,
+      planeData: planeData,
     );
+    final inputImage =
+        InputImage.fromBytes(bytes: bytes, inputImageData: inputImageData);
 
     return inputImage;
   }
 
   //Show rectangles around detected objects
   Widget buildResult() {
+    print("que isso meu deus");
+
     if (_scanResults == null ||
         controller == null ||
         !controller.value.isInitialized) {
       return const Text('Empty');
     }
+
+    print("passando só pa ver");
 
     final Size imageSize = Size(
       controller.value.previewSize!.height,
@@ -286,7 +277,7 @@ class PosePainter extends CustomPainter {
           PoseLandmarkType.rightKnee, PoseLandmarkType.rightAnkle, rightPaint);
     }
 
-    /* for (final pose in poses) {
+    for (final pose in poses) {
       pose.landmarks.forEach((_, landmark) {
         canvas.drawCircle(
             Offset(landmark.x * scaleX, landmark.y * scaleY), 1, paint);
@@ -324,7 +315,7 @@ class PosePainter extends CustomPainter {
           PoseLandmarkType.rightHip, PoseLandmarkType.rightKnee, rightPaint);
       paintLine(
           PoseLandmarkType.rightKnee, PoseLandmarkType.rightAnkle, rightPaint);
-    } */
+    }
   }
 
   @override
