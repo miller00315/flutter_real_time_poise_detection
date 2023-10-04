@@ -38,7 +38,8 @@ class _MyHomePageState extends State<MyHomePage> {
   late Size size;
 
   //TODO declare detector
-  dynamic poseDetector;
+  late PoseDetector poseDetector;
+
   @override
   void initState() {
     super.initState();
@@ -48,8 +49,7 @@ class _MyHomePageState extends State<MyHomePage> {
   //TODO code to initialize the camera feed
   initializeCamera() async {
     //TODO initialize detector
-    final options = PoseDetectorOptions(
-        mode: PoseDetectionMode.stream);
+    final options = PoseDetectorOptions(mode: PoseDetectionMode.stream);
     poseDetector = PoseDetector(options: options);
 
     controller = CameraController(cameras[0], ResolutionPreset.high);
@@ -58,9 +58,9 @@ class _MyHomePageState extends State<MyHomePage> {
         return;
       }
       controller.startImageStream((image) => {
-        if (!isBusy)
-          {isBusy = true, img = image, doPoseEstimationOnFrame()}
-      });
+            print("passando: $isBusy"),
+            if (!isBusy) {isBusy = true, img = image, doPoseEstimationOnFrame()}
+          });
     });
   }
 
@@ -73,48 +73,76 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   //TODO pose detection on a frame
-  dynamic _scanResults;
+  List<Pose>? _scanResults;
   CameraImage? img;
   doPoseEstimationOnFrame() async {
+    print('passando 2');
+
+    try {
+      if (img != null) {
+        final inputImage = getInputImage(img!);
+
+        final res = await poseDetector.processImage(inputImage);
+
+        print(res);
+      }
+    } catch (e) {
+      print(e);
+    }
+
     setState(() {
       isBusy = false;
     });
+
+    /* poseDetector
+        .processImage(inputImage)
+        .then(
+          (value) => setState(
+            () {
+              print(value);
+
+              _scanResults = value;
+              isBusy = false;
+            },
+          ),
+        )
+        .catchError(
+          (e) => setState(
+            () {
+              print(e);
+              _scanResults = null;
+              isBusy = false;
+            },
+          ),
+        ); */
   }
 
-  InputImage getInputImage() {
+  InputImage getInputImage(CameraImage img) {
     final WriteBuffer allBytes = WriteBuffer();
-    for (final Plane plane in img!.planes) {
+    for (final Plane plane in img.planes) {
       allBytes.putUint8List(plane.bytes);
     }
     final bytes = allBytes.done().buffer.asUint8List();
-    final Size imageSize = Size(img!.width.toDouble(), img!.height.toDouble());
+    final Size imageSize = Size(img.width.toDouble(), img.height.toDouble());
     final camera = cameras[0];
     final imageRotation =
-    InputImageRotationValue.fromRawValue(camera.sensorOrientation);
+        InputImageRotationValue.fromRawValue(camera.sensorOrientation);
     // if (imageRotation == null) return;
 
-    final inputImageFormat =
-    InputImageFormatValue.fromRawValue(img!.format.raw);
+    final inputImageFormat = InputImageFormatValue.fromRawValue(img.format.raw);
     // if (inputImageFormat == null) return null;
 
-    final planeData = img!.planes.map(
-          (Plane plane) {
-        return InputImagePlaneMetadata(
-          bytesPerRow: plane.bytesPerRow,
-          height: plane.height,
-          width: plane.width,
-        );
-      },
-    ).toList();
-
-    final inputImageData = InputImageData(
-      size: imageSize,
-      imageRotation: imageRotation!,
-      inputImageFormat: inputImageFormat!,
-      planeData: planeData,
+    final InputImageMetadata inputImageMetadata = InputImageMetadata(
+      size: size,
+      rotation: imageRotation!,
+      format: inputImageFormat!,
+      bytesPerRow: imageSize.width.toInt(),
     );
-    final inputImage =
-    InputImage.fromBytes(bytes: bytes, inputImageData: inputImageData);
+
+    final inputImage = InputImage.fromBytes(
+      bytes: bytes,
+      metadata: inputImageMetadata,
+    );
 
     return inputImage;
   }
@@ -124,14 +152,16 @@ class _MyHomePageState extends State<MyHomePage> {
     if (_scanResults == null ||
         controller == null ||
         !controller.value.isInitialized) {
-      return Text('');
+      return const Text('Empty');
     }
 
     final Size imageSize = Size(
       controller.value.previewSize!.height,
       controller.value.previewSize!.width,
     );
-    CustomPainter painter = PosePainter(imageSize, _scanResults);
+
+    CustomPainter painter = PosePainter(imageSize, _scanResults!);
+
     return CustomPaint(
       painter: painter,
     );
@@ -151,36 +181,41 @@ class _MyHomePageState extends State<MyHomePage> {
           child: Container(
             child: (controller.value.isInitialized)
                 ? AspectRatio(
-              aspectRatio: controller.value.aspectRatio,
-              child: CameraPreview(controller),
-            )
+                    aspectRatio: controller.value.aspectRatio,
+                    child: CameraPreview(controller),
+                  )
                 : Container(),
           ),
         ),
       );
 
-      // stackChildren.add(
-      //   Positioned(
-      //       top: 0.0,
-      //       left: 0.0,
-      //       width: size.width,
-      //       height: size.height,
-      //       child: buildResult()),
-      // );
+      stackChildren.add(
+        Positioned(
+          top: 0.0,
+          left: 0.0,
+          width: size.width,
+          height: size.height,
+          child: buildResult(),
+        ),
+      );
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Pose Estimation",style: TextStyle(color: Colors.black),),
+        title: const Text(
+          "Pose Estimation",
+          style: TextStyle(color: Colors.black),
+        ),
         backgroundColor: Colors.yellow,
       ),
       backgroundColor: Colors.black,
       body: Container(
-          margin: const EdgeInsets.only(top: 0),
-          color: Colors.black,
-          child: Stack(
-            children: stackChildren,
-          )),
+        margin: const EdgeInsets.only(top: 0),
+        color: Colors.black,
+        child: Stack(
+          children: stackChildren,
+        ),
+      ),
     );
   }
 }
@@ -217,39 +252,79 @@ class PosePainter extends CustomPainter {
             Offset(landmark.x * scaleX, landmark.y * scaleY), 1, paint);
       });
 
-      // void paintLine(
-      //     PoseLandmarkType type1, PoseLandmarkType type2, Paint paintType) {
-      //   final PoseLandmark joint1 = pose.landmarks[type1]!;
-      //   final PoseLandmark joint2 = pose.landmarks[type2]!;
-      //   canvas.drawLine(Offset(joint1.x * scaleX, joint1.y * scaleY),
-      //       Offset(joint2.x * scaleX, joint2.y * scaleY), paintType);
-      // }
-      //
-      // //Draw arms
-      // paintLine(
-      //     PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow, leftPaint);
-      // paintLine(
-      //     PoseLandmarkType.leftElbow, PoseLandmarkType.leftWrist, leftPaint);
-      // paintLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightElbow,
-      //     rightPaint);
-      // paintLine(
-      //     PoseLandmarkType.rightElbow, PoseLandmarkType.rightWrist, rightPaint);
-      //
-      // //Draw Body
-      // paintLine(
-      //     PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip, leftPaint);
-      // paintLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightHip,
-      //     rightPaint);
-      //
-      // //Draw legs
-      // paintLine(PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee, leftPaint);
-      // paintLine(
-      //     PoseLandmarkType.leftKnee, PoseLandmarkType.leftAnkle, leftPaint);
-      // paintLine(
-      //     PoseLandmarkType.rightHip, PoseLandmarkType.rightKnee, rightPaint);
-      // paintLine(
-      //     PoseLandmarkType.rightKnee, PoseLandmarkType.rightAnkle, rightPaint);
+      void paintLine(
+          PoseLandmarkType type1, PoseLandmarkType type2, Paint paintType) {
+        final PoseLandmark joint1 = pose.landmarks[type1]!;
+        final PoseLandmark joint2 = pose.landmarks[type2]!;
+        canvas.drawLine(Offset(joint1.x * scaleX, joint1.y * scaleY),
+            Offset(joint2.x * scaleX, joint2.y * scaleY), paintType);
+      }
+
+      //Draw arms
+      paintLine(
+          PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow, leftPaint);
+      paintLine(
+          PoseLandmarkType.leftElbow, PoseLandmarkType.leftWrist, leftPaint);
+      paintLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightElbow,
+          rightPaint);
+      paintLine(
+          PoseLandmarkType.rightElbow, PoseLandmarkType.rightWrist, rightPaint);
+
+      //Draw Body
+      paintLine(
+          PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip, leftPaint);
+      paintLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightHip,
+          rightPaint);
+
+      //Draw legs
+      paintLine(PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee, leftPaint);
+      paintLine(
+          PoseLandmarkType.leftKnee, PoseLandmarkType.leftAnkle, leftPaint);
+      paintLine(
+          PoseLandmarkType.rightHip, PoseLandmarkType.rightKnee, rightPaint);
+      paintLine(
+          PoseLandmarkType.rightKnee, PoseLandmarkType.rightAnkle, rightPaint);
     }
+
+    /* for (final pose in poses) {
+      pose.landmarks.forEach((_, landmark) {
+        canvas.drawCircle(
+            Offset(landmark.x * scaleX, landmark.y * scaleY), 1, paint);
+      });
+
+      void paintLine(
+          PoseLandmarkType type1, PoseLandmarkType type2, Paint paintType) {
+        final PoseLandmark joint1 = pose.landmarks[type1]!;
+        final PoseLandmark joint2 = pose.landmarks[type2]!;
+        canvas.drawLine(Offset(joint1.x * scaleX, joint1.y * scaleY),
+            Offset(joint2.x * scaleX, joint2.y * scaleY), paintType);
+      }
+
+      //Draw arms
+      paintLine(
+          PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow, leftPaint);
+      paintLine(
+          PoseLandmarkType.leftElbow, PoseLandmarkType.leftWrist, leftPaint);
+      paintLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightElbow,
+          rightPaint);
+      paintLine(
+          PoseLandmarkType.rightElbow, PoseLandmarkType.rightWrist, rightPaint);
+
+      //Draw Body
+      paintLine(
+          PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip, leftPaint);
+      paintLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightHip,
+          rightPaint);
+
+      //Draw legs
+      paintLine(PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee, leftPaint);
+      paintLine(
+          PoseLandmarkType.leftKnee, PoseLandmarkType.leftAnkle, leftPaint);
+      paintLine(
+          PoseLandmarkType.rightHip, PoseLandmarkType.rightKnee, rightPaint);
+      paintLine(
+          PoseLandmarkType.rightKnee, PoseLandmarkType.rightAnkle, rightPaint);
+    } */
   }
 
   @override
