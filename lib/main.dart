@@ -1,5 +1,3 @@
-import 'dart:ui';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
@@ -37,7 +35,6 @@ class _MyHomePageState extends State<MyHomePage> {
   bool isBusy = false;
   late Size size;
 
-  //TODO declare detector
   late PoseDetector poseDetector;
 
   @override
@@ -58,7 +55,6 @@ class _MyHomePageState extends State<MyHomePage> {
         return;
       }
       controller.startImageStream((image) => {
-            print("passando: $isBusy"),
             if (!isBusy) {isBusy = true, img = image, doPoseEstimationOnFrame()}
           });
     });
@@ -81,15 +77,11 @@ class _MyHomePageState extends State<MyHomePage> {
 
       _scanResults = await poseDetector.processImage(inputImage);
 
-      print(_scanResults);
-
       setState(() {
         isBusy = false;
         _scanResults;
       });
     } catch (e) {
-      print(e);
-
       setState(() {
         isBusy = false;
       });
@@ -136,15 +128,11 @@ class _MyHomePageState extends State<MyHomePage> {
 
   //Show rectangles around detected objects
   Widget buildResult() {
-    print("que isso meu deus");
-
     if (_scanResults == null ||
         controller == null ||
         !controller.value.isInitialized) {
       return const Text('Empty');
     }
-
-    print("passando só pa ver");
 
     final Size imageSize = Size(
       controller.value.previewSize!.height,
